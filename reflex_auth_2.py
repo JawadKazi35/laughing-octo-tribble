@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from urllib.parse import urlencode
+import json
 
 load_dotenv()
 
@@ -21,14 +22,16 @@ oauth.register(
     ),
 )
 
+
 async def login_endpoint(request: Request):
     callback_uri = request.url_for("callback_endpoint")
     return await oauth.keycloak.authorize_redirect(request, callback_uri)
 
 async def callback_endpoint(request: Request):
     token = await oauth.keycloak.authorize_access_token(request)
-    request.session["user"] = dict(token)
-    return RedirectResponse(url="http://172.31.0.153:3000/")
+    token_json = json.dumps(dict(token)) #
+    response = RedirectResponse(url="http://172.31.0.153:3000/") 
+    return response
 
 async def logout_endpoint(request: Request):
     params = {
@@ -42,26 +45,24 @@ async def logout_endpoint(request: Request):
     )
     return RedirectResponse(url=logout_url)
 
-
+async def redirect_main():
+    print(State.set_false())
+    print('hi')
+    return RedirectResponse(url="http://172.31.0.153:3000/")
+    
 class State(rx.State):
-    count: int = 0
-    authenticated: bool = True
-    def increment(self):
-        self.count += 1
-    def decrement(self):
-        self.count -= 1
-
+    is_auth: bool = True
+    token: str = '' # 
+    
 def index() -> rx.Component:
-    return rx.vstack(
-        rx.cond(
-                State.authenticated,
+    return rx.cond(
+                State.is_auth,
                 page(),
                 rx.link("Login via Keycloak", href="/login"),
-        )
     )
 
 def page() -> rx.Component:
-    return rx.text('you are authenticated')
+    return rx.text(State.token) #
 
 app = rx.App()
 app.add_page(index)
@@ -74,3 +75,4 @@ app.api.add_middleware(
 app.api.add_api_route("/login", login_endpoint, methods=["GET"])
 app.api.add_api_route("/callback", callback_endpoint, methods=["GET"])
 app.api.add_api_route("/logout", logout_endpoint, methods=["GET"])
+app.api.add_api_route("/", redirect_main, methods=["GET"])
