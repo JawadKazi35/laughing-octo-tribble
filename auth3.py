@@ -23,11 +23,12 @@ class State(rx.State):
                 return rx.redirect('/')
             except Exception as e:
                 print('login failed, error: ', e)
+                return rx.redirect('/login')
 
     def logout(self):
         self.token = ''
         self.logged_in = False
-        return rx.redirect('/login')
+        rx.redirect('/login')
 
     def check_auth(self):
         token_info = keycloak_openid.introspect(self.token)
@@ -35,61 +36,45 @@ class State(rx.State):
         print('checking auth')
         if token_is_active:
             self.logged_in = True
-            return rx.redirect(self.router.page.path)
+            rx.redirect('/')
         else:
             self.logged_in = False
-            return rx.redirect('/login')
+            rx.redirect('/login')
 
+@rx.page(route='/')
+def index():
+    return rx.text('h')
+
+@rx.page(route='/login')
 def login():
-    return rx.vstack(   
-        rx.form(
-            rx.vstack(
-                rx.input(
-                    placeholder="username",
-                    name="username",
-                ),
-                rx.input(
-                    placeholder="password",
-                    name="password",
-                ),
-                rx.button("submit", type="submit"),
-            ),
-            on_submit=State.login,
-            reset_on_submit=True,
-        ),
+    return rx.cond(
+        State.logged_in,
+        rx.text('', on_mount=rx.redirect('/')),
+        login_page(),
+        
     )
 
+def login_page() -> rx.Component:
+    return rx.vstack(   
+            rx.form(
+                rx.vstack(
+                    rx.input(
+                        placeholder="username",
+                        name="username",
+                    ),
+                    rx.input(
+                        placeholder="password",
+                        name="password",
+                    ),
+                    rx.button("submit", type="submit"),
+                ),
+                on_submit=State.login,
+                reset_on_submit=True,
+            ),
+        )
+
+@rx.page(route='/logout')
 def logout():
     return rx.text('', on_mount=State.logout)
 
-def index():
-    return rx.fragment(
-        rx.cond(
-            State.logged_in,
-            protected_page(),
-            rx.text('', on_mount=State.check_auth),
-        )
-    )
-
-def protected_page():
-    return rx.text('protected')
-
-def test():
-    return rx.fragment(
-        rx.cond(
-            State.logged_in,
-            test_page(),
-            rx.text('', on_mount=State.check_auth),
-        )
-    )
-
-# for some reason cond runs both true and false, could be the on mount, but it looked like it worked in those other ones
-
-def test_page():
-    return rx.text('this is a test page')
-
 app = rx.App()
-app.add_page(login)
-app.add_page(test)
-app.add_page(index)
-app.add_page(logout)
